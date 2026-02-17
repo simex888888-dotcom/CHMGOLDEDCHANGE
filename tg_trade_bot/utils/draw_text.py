@@ -1,7 +1,7 @@
 # utils/draw_text.py
-import os
+
 from PIL import ImageFont
-from main import BASE_DIR
+
 
 def px(val, size):
     return int(val * size)
