@@ -6,12 +6,24 @@ Pure bot mode — no Mini App required.
 import asyncio
 import logging
 import os
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path so `bot.*` and sibling packages resolve
+# regardless of how the script is invoked (python bot/main.py  OR  python -m bot.main)
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
+
+from bot.handlers.admin import router as admin_router
+from bot.handlers.client import router as client_router
+from bot.scheduler import setup_scheduler
 
 load_dotenv()
 
@@ -36,10 +48,6 @@ dp = Dispatcher(storage=storage)
 
 
 async def main() -> None:
-    from bot.handlers.admin import router as admin_router
-    from bot.handlers.client import router as client_router
-    from bot.scheduler import setup_scheduler
-
     # Admin router first (more specific filters)
     dp.include_router(admin_router)
     # Client router (general users)
