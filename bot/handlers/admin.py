@@ -25,9 +25,19 @@ from database.models import Order, OrderStatus
 
 logger = logging.getLogger(__name__)
 
-router = Router()
-
 ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
+
+# Router with admin-only filter applied at the router level
+from aiogram.filters import Filter
+
+class IsAdmin(Filter):
+    async def __call__(self, event) -> bool:
+        user = getattr(event, "from_user", None)
+        return bool(user and user.id == ADMIN_CHAT_ID)
+
+router = Router()
+router.message.filter(IsAdmin())
+router.callback_query.filter(IsAdmin())
 MINI_APP_URL = os.getenv("MINI_APP_URL", "")
 
 DIRECTION_LABELS = {
@@ -46,23 +56,6 @@ STATUS_LABELS = {
     "cancelled": "❌ Отменена",
 }
 
-
-def is_admin(message: Message | CallbackQuery) -> bool:
-    user = message.from_user if isinstance(message, Message) else message.from_user
-    return user and user.id == ADMIN_CHAT_ID
-
-
-def admin_only(func):
-    """Decorator: restrict handler to admin only."""
-    import functools
-
-    @functools.wraps(func)
-    async def wrapper(event, *args, **kwargs):
-        if not is_admin(event):
-            return
-        return await func(event, *args, **kwargs)
-
-    return wrapper
 
 
 def _order_card(order: Order) -> str:
@@ -118,7 +111,6 @@ def _order_inline_kb(order: Order) -> InlineKeyboardMarkup:
 # /start
 # --------------------------------------------------------------------------
 @router.message(Command("start"))
-@admin_only
 async def cmd_start(message: Message):
     text = (
         "👋 <b>CHM GOLD EXCHANGE — Панель администратора</b>\n\n"
@@ -142,7 +134,6 @@ async def cmd_start(message: Message):
 # /orders — list with pagination
 # --------------------------------------------------------------------------
 @router.message(Command("orders"))
-@admin_only
 async def cmd_orders(message: Message):
     await _show_orders_page(message, page=0)
 
@@ -210,7 +201,6 @@ async def cb_page(callback: CallbackQuery):
 # /order <id>
 # --------------------------------------------------------------------------
 @router.message(Command("order"))
-@admin_only
 async def cmd_order(message: Message):
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
@@ -252,7 +242,6 @@ async def _find_order(order_id_str: str) -> Order | None:
 # /approve <id>
 # --------------------------------------------------------------------------
 @router.message(Command("approve"))
-@admin_only
 async def cmd_approve(message: Message):
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
@@ -360,7 +349,6 @@ async def cb_inprogress(callback: CallbackQuery):
 # /complete <id>
 # --------------------------------------------------------------------------
 @router.message(Command("complete"))
-@admin_only
 async def cmd_complete(message: Message):
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
@@ -414,7 +402,6 @@ async def _complete_order(event, order_id_str: str):
 # /cancel <id> <reason>
 # --------------------------------------------------------------------------
 @router.message(Command("cancel"))
-@admin_only
 async def cmd_cancel(message: Message):
     parts = message.text.split(maxsplit=2)
     if len(parts) < 2:
@@ -474,7 +461,6 @@ async def _cancel_order(event, order_id_str: str, reason: str):
 # /rates
 # --------------------------------------------------------------------------
 @router.message(Command("rates"))
-@admin_only
 async def cmd_rates(message: Message):
     try:
         base_rates = await get_rates()
@@ -500,7 +486,6 @@ async def cmd_rates(message: Message):
 # /setrate <pair> <value>
 # --------------------------------------------------------------------------
 @router.message(Command("setrate"))
-@admin_only
 async def cmd_setrate(message: Message):
     parts = message.text.split(maxsplit=2)
     if len(parts) < 3:
@@ -549,7 +534,6 @@ async def cmd_setrate(message: Message):
 # /stats
 # --------------------------------------------------------------------------
 @router.message(Command("stats"))
-@admin_only
 async def cmd_stats(message: Message):
     now = datetime.now(timezone.utc)
     day_ago = now - timedelta(days=1)

@@ -1,5 +1,6 @@
 """
 CHM GOLD EXCHANGE Telegram Bot entry point.
+Pure bot mode — no Mini App required.
 """
 
 import asyncio
@@ -9,6 +10,7 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,23 +30,39 @@ bot = Bot(
     default=DefaultBotProperties(parse_mode=ParseMode.HTML),
 )
 
-dp = Dispatcher()
+# MemoryStorage for FSM (use Redis for multi-instance production)
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
 
 
 async def main() -> None:
     from bot.handlers.admin import router as admin_router
+    from bot.handlers.client import router as client_router
     from bot.scheduler import setup_scheduler
 
+    # Admin router first (more specific filters)
     dp.include_router(admin_router)
+    # Client router (general users)
+    dp.include_router(client_router)
 
     # Setup APScheduler
     scheduler = setup_scheduler(bot)
     scheduler.start()
-    logger.info("Scheduler started")
+    logger.info("Scheduler started — posts at 10:00 and 20:00 MSK")
 
-    logger.info("Starting CHM GOLD EXCHANGE Bot")
+    # Auto-create tables for SQLite dev environment
+    db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./chmgold.db")
+    if "sqlite" in db_url:
+        from database.engine import create_tables
+        await create_tables()
+        logger.info("SQLite tables created/verified")
+
+    logger.info("Starting CHM GOLD EXCHANGE Bot (polling mode)")
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        await dp.start_polling(
+            bot,
+            allowed_updates=dp.resolve_used_update_types(),
+        )
     finally:
         scheduler.shutdown()
         await bot.session.close()

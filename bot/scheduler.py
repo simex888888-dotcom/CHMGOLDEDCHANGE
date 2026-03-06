@@ -18,7 +18,7 @@ from api.cryptoxchange import get_rates
 logger = logging.getLogger(__name__)
 
 CHANNEL_ID = os.getenv("CHANNEL_ID", "")
-MINI_APP_URL = os.getenv("MINI_APP_URL", "")
+BOT_USERNAME = os.getenv("BOT_USERNAME", "")  # optional: @YourBot
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 
@@ -76,15 +76,11 @@ def _build_post_text(rates: dict, now: datetime) -> str:
     return text
 
 
-def _build_post_kb() -> InlineKeyboardMarkup | None:
-    if not MINI_APP_URL:
-        return None
+def _build_post_kb(bot_username: str = "") -> InlineKeyboardMarkup:
+    url = f"https://t.me/{bot_username}" if bot_username else "https://t.me/"
     return InlineKeyboardMarkup(
         inline_keyboard=[[
-            InlineKeyboardButton(
-                text="💱 Обменять",
-                web_app={"url": MINI_APP_URL},
-            )
+            InlineKeyboardButton(text="💱 Обменять", url=url)
         ]]
     )
 
@@ -103,13 +99,15 @@ async def post_rates(bot: Bot) -> None:
 
     now = datetime.now(MOSCOW_TZ)
     text = _build_post_text(rates, now)
-    kb = _build_post_kb()
+    kb = _build_post_kb(BOT_USERNAME)
 
     try:
-        kwargs = {"chat_id": CHANNEL_ID, "text": text, "parse_mode": "HTML"}
-        if kb:
-            kwargs["reply_markup"] = kb
-        await bot.send_message(**kwargs)
+        await bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
         logger.info("Rate post sent to channel %s at %s", CHANNEL_ID, now.strftime("%Y-%m-%d %H:%M"))
     except Exception as e:
         logger.error("Failed to send rate post to channel %s: %s", CHANNEL_ID, e)
